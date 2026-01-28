@@ -115,16 +115,41 @@ async def message_handler(message: types.Message):
                         cid = str(message.chat.id).replace("-100", "")
                         msg_link = f"https://t.me/c/{cid}/{message.message_id}"
 
+                    # Escape Markdown special characters in user-provided text
+                    def escape_markdown(text: str) -> str:
+                        """Escape Markdown special characters."""
+                        special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+                        for char in special_chars:
+                            text = text.replace(char, '\\' + char)
+                        return text
+                    
+                    trigger_snippet = escape_markdown(text[:50])
+                    if len(text) > 50:
+                        trigger_snippet += "..."
+
                     notification_text = (
                         f"🔔 **Trigger Used!**\n"
-                        f"👤 **User:** {user} (@{username})\n"
-                        f"📍 **Chat:** {chat_title}\n"
+                        f"👤 **User:** {escape_markdown(user)} (@{username})\n"
+                        f"📍 **Chat:** {escape_markdown(chat_title)}\n"
                         f"🔗 **Link:** [Message]({msg_link})\n"
-                        f"📝 **Trigger:** `{text[:50]}...`" # Show snippet of triggered text
+                        f"📝 **Trigger:** {trigger_snippet}"
                     )
+                    
                     try:
                         await message.bot.send_message(chat_id=ADMIN_ID, text=notification_text, parse_mode="Markdown")
                     except Exception as e:
-                        print(f"Failed to notify admin: {e}")
+                        # If Markdown fails, send as plain text
+                        print(f"Failed to notify admin with Markdown: {e}")
+                        try:
+                            plain_notification = (
+                                f"🔔 Trigger Used!\n"
+                                f"👤 User: {user} (@{username})\n"
+                                f"📍 Chat: {chat_title}\n"
+                                f"🔗 Link: {msg_link}\n"
+                                f"📝 Trigger: {text[:50]}{'...' if len(text) > 50 else ''}"
+                            )
+                            await message.bot.send_message(chat_id=ADMIN_ID, text=plain_notification)
+                        except Exception as e2:
+                            print(f"Failed to notify admin even with plain text: {e2}")
             except Exception as e:
                 print(f"Failed to send response: {e}")
