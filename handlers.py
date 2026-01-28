@@ -12,21 +12,38 @@ async def refresh_triggers():
     TRIGGERS_CACHE = await get_all_triggers()
     print(f"Loaded {len(TRIGGERS_CACHE)} triggers.")
 
+def is_admin(user_id: int) -> bool:
+    """Check if user is admin."""
+    from config import ADMIN_ID
+    if not ADMIN_ID:
+        return False
+    return str(user_id) == str(ADMIN_ID)
+
 @router.message(Command("start"))
 async def start_handler(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return
+    
     await message.answer("Bot is running! I am watching the chat.")
     if not TRIGGERS_CACHE:
         await refresh_triggers()
 
 @router.message(Command("reload"))
 async def reload_handler(message: types.Message):
-    # In a real bot, add admin check here!
+    if not is_admin(message.from_user.id):
+        await message.answer("⛔ Access denied. Admin only.")
+        return
+    
     await refresh_triggers()
     await message.answer("Triggers reloaded from database.")
 
 @router.message(Command("chatid"))
 async def chatid_handler(message: types.Message):
     """Returns the current chat ID for trigger configuration."""
+    if not is_admin(message.from_user.id):
+        await message.answer("⛔ Access denied. Admin only.")
+        return
+    
     chat_id = message.chat.id
     chat_title = message.chat.title or "Private Chat"
     await message.answer(
@@ -43,6 +60,10 @@ from ai_client import get_ai_response
 
 @router.message()
 async def message_handler(message: types.Message):
+    # Skip trigger processing in private chats (only work in groups/channels)
+    if message.chat.type == 'private':
+        return
+    
     if not TRIGGERS_CACHE:
         await refresh_triggers()
         
