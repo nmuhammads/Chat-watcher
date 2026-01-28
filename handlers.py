@@ -94,7 +94,8 @@ async def message_handler(message: types.Message):
                 elif resp_type == 'photo':
                      await message.reply_photo(response_text)
                 else:
-                    await message.reply(response_text)
+                    # Text triggers with Markdown support
+                    await message.reply(response_text, parse_mode="Markdown")
                 
                 cooldown_manager.mark_triggered(chat_id, trigger_id, timestamp=msg_date)
 
