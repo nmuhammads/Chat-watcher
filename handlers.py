@@ -24,6 +24,19 @@ async def reload_handler(message: types.Message):
     await refresh_triggers()
     await message.answer("Triggers reloaded from database.")
 
+@router.message(Command("chatid"))
+async def chatid_handler(message: types.Message):
+    """Returns the current chat ID for trigger configuration."""
+    chat_id = message.chat.id
+    chat_title = message.chat.title or "Private Chat"
+    await message.answer(
+        f"📍 **Chat Info**\n"
+        f"**Title:** {chat_title}\n"
+        f"**Chat ID:** `{chat_id}`\n\n"
+        f"_Use this ID in Supabase to create chat-specific triggers._",
+        parse_mode="Markdown"
+    )
+
 from ai_client import get_ai_response
 
 # ... imports ...
@@ -37,7 +50,7 @@ async def message_handler(message: types.Message):
     if not text:
         return
 
-    trigger = check_message_for_triggers(text, TRIGGERS_CACHE)
+    trigger = check_message_for_triggers(text, TRIGGERS_CACHE, chat_id=message.chat.id)
     
     if trigger:
         chat_id = message.chat.id

@@ -12,7 +12,7 @@ async def get_ai_response(system_prompt: str, user_message: str) -> str:
     Generates a response using NanoGPT.
     """
     try:
-        logging.info(f"🤖 AI Request [Model: {NANOGPT_MODEL}]:\nSystem: {system_prompt}\nUser: {user_message}")
+        logging.info(f"🤖 AI Request [Model: {NANOGPT_MODEL}]:\nUser: {user_message}")
         completion = await client.chat.completions.create(
             model=NANOGPT_MODEL,
             messages=[
