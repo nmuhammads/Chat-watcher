@@ -205,3 +205,8 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+schema.sql
+.env.example
+llm.txt
+system promtp exanple.txt
+system prompt example.txt
