@@ -39,11 +39,7 @@ async def reload_handler(message: types.Message):
 
 @router.message(Command("chatid"))
 async def chatid_handler(message: types.Message):
-    """Returns the current chat ID for trigger configuration."""
-    if not is_admin(message.from_user.id):
-        await message.answer("⛔ Access denied. Admin only.")
-        return
-    
+    """Returns the current chat ID for trigger configuration. Available to all users."""
     chat_id = message.chat.id
     chat_title = message.chat.title or "Private Chat"
     await message.answer(
