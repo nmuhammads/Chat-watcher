@@ -78,6 +78,9 @@ async def message_handler(message: types.Message):
         msg_date = message.date.timestamp()
 
         if cooldown_manager.can_trigger(chat_id, trigger_id, cooldown, timestamp=msg_date):
+            # Mark as triggered IMMEDIATELY to prevent race conditions with async AI requests
+            cooldown_manager.mark_triggered(chat_id, trigger_id, timestamp=msg_date)
+            
             response_text = trigger['response']
             resp_type = trigger.get('type', 'text')
             
@@ -96,8 +99,6 @@ async def message_handler(message: types.Message):
                 else:
                     # Text triggers with Markdown support
                     await message.reply(response_text, parse_mode="Markdown")
-                
-                cooldown_manager.mark_triggered(chat_id, trigger_id, timestamp=msg_date)
 
                 # Admin Notification
                 from config import ADMIN_ID
