@@ -1,6 +1,6 @@
 from aiogram import Router, F, types
 from aiogram.filters import Command
-from db import get_all_triggers
+from db import get_all_triggers, save_chat_photo
 from utils import check_message_for_triggers, CooldownManager
 from ai_client import get_ai_response, refresh_ai_config, get_ai_config
 
@@ -73,14 +73,138 @@ async def aiconfig_handler(message: types.Message):
     model = get_ai_config('ai_model', 'gpt-4o-mini')
     temp = get_ai_config('ai_temperature', '0.7')
     await message.answer(
-        f"🤖 **AI Configuration**\n\n"
-        f"• **Model:** `{model}`\n"
-        f"• **Temperature:** `{temp}`\n\n"
-        f"_Change in Supabase → app\\_config, then /reloadai_",
-        parse_mode="Markdown"
+        f"🤖 <b>AI Configuration</b>\n\n"
+        f"• <b>Model:</b> <code>{model}</code>\n"
+        f"• <b>Temperature:</b> <code>{temp}</code>\n\n"
+        f"<i>Change in Supabase → app_config, then /reloadai</i>",
+        parse_mode="HTML"
     )
 
+@router.message(F.photo)
+async def photo_handler(message: types.Message):
+    """Saves photos sent directly to the bot and forwards to admin."""
+    from config import ADMIN_ID
+    
+    # Check if we should save this photo:
+    # 1. Private chat (direct message to bot)
+    # 2. Reply to bot's message
+    # 3. Bot mentioned in caption
+    
+    is_private = message.chat.type == 'private'
+    
+    is_reply_to_bot = False
+    if message.reply_to_message and message.reply_to_message.from_user:
+        is_reply_to_bot = message.reply_to_message.from_user.id == message.bot.id
+    
+    is_bot_mentioned = False
+    bot_info = await message.bot.get_me()
+    bot_username = f"@{bot_info.username}".lower() if bot_info.username else None
+    if bot_username and message.caption:
+        is_bot_mentioned = bot_username in message.caption.lower()
+    
+    # Skip if none of the conditions are met
+    if not (is_private or is_reply_to_bot or is_bot_mentioned):
+        return
+    
+    # Get the largest photo (last in the array)
+    photo = message.photo[-1]
+    
+    photo_data = {
+        "file_id": photo.file_id,
+        "file_unique_id": photo.file_unique_id,
+        "file_size": photo.file_size,
+        "width": photo.width,
+        "height": photo.height
+    }
+    
+    save_chat_photo(
+        chat_id=message.chat.id,
+        user_id=message.from_user.id,
+        message_id=message.message_id,
+        photo_data=photo_data,
+        caption=message.caption
+    )
+    
+    # Forward photo to admin
+    if ADMIN_ID:
+        try:
+            user = message.from_user
+            chat_title = message.chat.title or "Private Chat"
+            username = f"@{user.username}" if user.username else "No username"
+            
+            # Build message link
+            msg_link = "No link"
+            if message.chat.username:
+                msg_link = f"https://t.me/{message.chat.username}/{message.message_id}"
+            elif message.chat.id < 0:
+                cid = str(message.chat.id).replace("-100", "")
+                msg_link = f"https://t.me/c/{cid}/{message.message_id}"
+            
+            # Indicate why photo was captured
+            reason = "📩 Direct" if is_private else ("↩️ Reply" if is_reply_to_bot else "📣 Mention")
+            
+            info_text = (
+                f"📸 <b>New Photo</b> ({reason})\n\n"
+                f"👤 <b>From:</b> {user.full_name} ({username})\n"
+                f"💬 <b>Chat:</b> {chat_title}\n"
+                f"🔗 <a href=\"{msg_link}\">View message</a>"
+            )
+            
+            if message.caption:
+                info_text += f"\n📝 <b>Caption:</b> {message.caption[:100]}"
+            
+            await message.bot.send_photo(
+                chat_id=ADMIN_ID,
+                photo=photo.file_id,
+                caption=info_text,
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            print(f"Failed to forward photo to admin: {e}")
+    
+    # Continue to check for triggers in caption
+    if message.caption:
+        await process_triggers(message, message.caption)
 
+async def process_triggers(message: types.Message, text: str):
+    """Process triggers for a message with given text."""
+    if message.chat.type == 'private':
+        return
+    
+    if not TRIGGERS_CACHE:
+        await refresh_triggers()
+    
+    trigger = check_message_for_triggers(text, TRIGGERS_CACHE, chat_id=message.chat.id)
+    
+    if trigger:
+        chat_id = message.chat.id
+        trigger_id = trigger['id']
+        cooldown = trigger.get('cooldown', 60)
+        msg_date = message.date.timestamp()
+
+        if cooldown_manager.can_trigger(chat_id, trigger_id, cooldown, timestamp=msg_date):
+            cooldown_manager.mark_triggered(chat_id, trigger_id, timestamp=msg_date)
+            
+            response_text = trigger['response']
+            resp_type = trigger.get('type', 'text')
+            
+            try:
+                if resp_type == 'ai':
+                    custom_model = trigger.get('ai_model')
+                    response_text = await get_ai_response(
+                        system_prompt=response_text,
+                        user_message=text,
+                        model=custom_model
+                    )
+                    await message.reply(response_text, parse_mode="Markdown")
+                elif resp_type == 'sticker':
+                    await message.reply_sticker(response_text)
+                elif resp_type == 'photo':
+                    await message.reply_photo(response_text)
+                else:
+                    await message.reply(response_text, parse_mode="Markdown")
+            except Exception as e:
+                print(f"Failed to send response: {e}")
 
 @router.message()
 async def message_handler(message: types.Message):
@@ -115,9 +239,12 @@ async def message_handler(message: types.Message):
             try:
                 if resp_type == 'ai':
                     # For AI, response_text acts as the system prompt
+                    # Use custom model from trigger if specified
+                    custom_model = trigger.get('ai_model')
                     response_text = await get_ai_response(
                         system_prompt=response_text,
-                        user_message=text
+                        user_message=text,
+                        model=custom_model
                     )
                     await message.reply(response_text, parse_mode="Markdown")
                 elif resp_type == 'sticker':

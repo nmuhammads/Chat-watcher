@@ -42,18 +42,27 @@ def refresh_ai_config():
     except Exception as e:
         logging.error(f"Failed to refresh AI config: {e}")
 
-async def get_ai_response(system_prompt: str, user_message: str) -> str:
+async def get_ai_response(system_prompt: str, user_message: str, model: str = None) -> str:
     """
     Generates a response using NanoGPT.
-    Model and temperature are fetched from app_config table.
+    
+    Args:
+        system_prompt: System prompt for AI
+        user_message: User message to respond to
+        model: Optional custom model name. If None or 'default', uses app_config.ai_model
     """
     try:
-        model = get_ai_config('ai_model', 'gpt-4o-mini')
+        # Use custom model or fallback to app_config
+        if model and model.lower() != 'default':
+            used_model = model
+        else:
+            used_model = get_ai_config('ai_model', 'gpt-4o-mini')
+        
         temperature = float(get_ai_config('ai_temperature', '0.7'))
         
-        logging.info(f"🤖 AI Request [Model: {model}, Temp: {temperature}]:\nUser: {user_message}")
+        logging.info(f"🤖 AI Request [Model: {used_model}, Temp: {temperature}]:\nUser: {user_message}")
         completion = await client.chat.completions.create(
-            model=model,
+            model=used_model,
             temperature=temperature,
             messages=[
                 {"role": "system", "content": system_prompt},
