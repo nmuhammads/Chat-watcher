@@ -2,7 +2,7 @@ from aiogram import Router, F, types
 from aiogram.filters import Command
 from db import get_all_triggers, save_chat_photo
 from utils import check_message_for_triggers, CooldownManager
-from ai_client import get_ai_response, refresh_ai_config, get_ai_config
+from ai_client import get_ai_response, refresh_ai_config, get_ai_config, clear_chat_history
 
 router = Router()
 cooldown_manager = CooldownManager()
@@ -79,6 +79,12 @@ async def aiconfig_handler(message: types.Message):
         f"<i>Change in Supabase → app_config, then /reloadai</i>",
         parse_mode="HTML"
     )
+
+@router.message(Command("clearhistory"))
+async def clearhistory_handler(message: types.Message):
+    """Clears AI conversation history for this chat."""
+    clear_chat_history(message.chat.id)
+    await message.answer("🗑 История разговора с AI очищена.", parse_mode="HTML")
 
 @router.message(F.photo)
 async def photo_handler(message: types.Message):
@@ -194,7 +200,8 @@ async def process_triggers(message: types.Message, text: str):
                     response_text = await get_ai_response(
                         system_prompt=response_text,
                         user_message=text,
-                        model=custom_model
+                        model=custom_model,
+                        chat_id=chat_id  # Enable context memory
                     )
                     await message.reply(response_text, parse_mode="Markdown")
                 elif resp_type == 'sticker':
@@ -244,7 +251,8 @@ async def message_handler(message: types.Message):
                     response_text = await get_ai_response(
                         system_prompt=response_text,
                         user_message=text,
-                        model=custom_model
+                        model=custom_model,
+                        chat_id=chat_id  # Enable context memory
                     )
                     await message.reply(response_text, parse_mode="Markdown")
                 elif resp_type == 'sticker':
