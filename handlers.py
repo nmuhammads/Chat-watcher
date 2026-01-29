@@ -2,6 +2,7 @@ from aiogram import Router, F, types
 from aiogram.filters import Command
 from db import get_all_triggers
 from utils import check_message_for_triggers, CooldownManager
+from ai_client import get_ai_response, refresh_ai_config, get_ai_config
 
 router = Router()
 cooldown_manager = CooldownManager()
@@ -50,9 +51,36 @@ async def chatid_handler(message: types.Message):
         parse_mode="Markdown"
     )
 
-from ai_client import get_ai_response
+@router.message(Command("reloadai"))
+async def reloadai_handler(message: types.Message):
+    """Reloads AI configuration from database. Admin only."""
+    if not is_admin(message.from_user.id):
+        await message.answer("⛔ Access denied. Admin only.")
+        return
+    
+    refresh_ai_config()
+    model = get_ai_config('ai_model', 'gpt-4o-mini')
+    temp = get_ai_config('ai_temperature', '0.7')
+    await message.answer(f"🔄 AI config reloaded!\n\n📊 **Current settings:**\n• Model: `{model}`\n• Temperature: `{temp}`", parse_mode="Markdown")
 
-# ... imports ...
+@router.message(Command("aiconfig"))
+async def aiconfig_handler(message: types.Message):
+    """Shows current AI configuration. Admin only."""
+    if not is_admin(message.from_user.id):
+        await message.answer("⛔ Access denied. Admin only.")
+        return
+    
+    model = get_ai_config('ai_model', 'gpt-4o-mini')
+    temp = get_ai_config('ai_temperature', '0.7')
+    await message.answer(
+        f"🤖 **AI Configuration**\n\n"
+        f"• **Model:** `{model}`\n"
+        f"• **Temperature:** `{temp}`\n\n"
+        f"_Change in Supabase → app\\_config, then /reloadai_",
+        parse_mode="Markdown"
+    )
+
+
 
 @router.message()
 async def message_handler(message: types.Message):
